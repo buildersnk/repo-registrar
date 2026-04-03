@@ -1,0 +1,386 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Repository Registrar",
+    "description": "Central registry for discovering, tracking, and monitoring repositories in an ecosystem. Each resource response follows HAL+JSON (`application/hal+json`) and includes `_links` for HATEOAS navigation.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "/", "description": "This server" }
+  ],
+  "tags": [
+    { "name": "Root",         "description": "Entry point with navigation links" },
+    { "name": "Repositories", "description": "Register, discover, and manage repositories" },
+    { "name": "Health",       "description": "Health status and heartbeat" },
+    { "name": "Stats",        "description": "Ecosystem-wide statistics" }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["Root"],
+        "summary": "API root",
+        "description": "Returns links to all top-level resources.",
+        "operationId": "getRoot",
+        "responses": {
+          "200": {
+            "description": "API root",
+            "content": {
+              "application/hal+json": {
+                "schema": { "$ref": "#/components/schemas/Root" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repositories": {
+      "get": {
+        "tags": ["Repositories"],
+        "summary": "List repositories",
+        "description": "Returns all registered repositories. Supports filtering by `repoType`, `healthStatus`, and `tag`.",
+        "operationId": "listRepositories",
+        "parameters": [
+          {
+            "name": "repoType",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["producer", "consumer", "both"] },
+            "description": "Filter by data role"
+          },
+          {
+            "name": "healthStatus",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["healthy", "degraded", "unhealthy", "unknown"] },
+            "description": "Filter by health status"
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by tag"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of repositories",
+            "content": {
+              "application/hal+json": {
+                "schema": { "$ref": "#/components/schemas/RepositoryList" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Repositories"],
+        "summary": "Register a repository",
+        "description": "Registers a new repository in the ecosystem.",
+        "operationId": "registerRepository",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RepositoryCreate" },
+              "examples": {
+                "producer": {
+                  "summary": "A data-producing service",
+                  "value": {
+                    "name": "inventory-service",
+                    "description": "Manages product inventory and emits stock-level events",
+                    "repoType": "producer",
+                    "url": "https://github.com/acme/inventory-service",
+                    "healthCheckUrl": "https://inventory.acme.io/health",
+                    "tags": ["inventory", "events"],
+                    "apis": [
+                      { "path": "/products", "method": "GET", "description": "List all products", "contentType": "application/json" },
+                      { "path": "/products/{id}/stock", "method": "PUT", "description": "Update stock level", "contentType": "application/json" }
+                    ]
+                  }
+                },
+                "consumer": {
+                  "summary": "A data-consuming service",
+                  "value": {
+                    "name": "analytics-service",
+                    "description": "Consumes events and generates business intelligence reports",
+                    "repoType": "consumer",
+                    "url": "https://github.com/acme/analytics-service",
+                    "tags": ["analytics", "reporting"],
+                    "apis": [
+                      { "path": "/reports/daily", "method": "GET", "description": "Daily summary report", "contentType": "application/json" }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Repository registered",
+            "content": {
+              "application/hal+json": {
+                "schema": { "$ref": "#/components/schemas/Repository" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/repositories/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+      ],
+      "get": {
+        "tags": ["Repositories"],
+        "summary": "Get a repository",
+        "operationId": "getRepository",
+        "responses": {
+          "200": {
+            "description": "Repository details",
+            "content": {
+              "application/hal+json": { "schema": { "$ref": "#/components/schemas/Repository" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "tags": ["Repositories"],
+        "summary": "Update a repository",
+        "description": "Partial update — only the fields you include are changed.",
+        "operationId": "updateRepository",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RepositoryUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated repository",
+            "content": {
+              "application/hal+json": { "schema": { "$ref": "#/components/schemas/Repository" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Repositories"],
+        "summary": "Deregister a repository",
+        "operationId": "deregisterRepository",
+        "responses": {
+          "204": { "description": "Repository deregistered" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/repositories/{id}/health": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+      ],
+      "get": {
+        "tags": ["Health"],
+        "summary": "Get health status",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/hal+json": { "schema": { "$ref": "#/components/schemas/HealthStatus" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/repositories/{id}/heartbeat": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+      ],
+      "post": {
+        "tags": ["Health"],
+        "summary": "Send a heartbeat",
+        "description": "Called by a repository to self-report its health status.",
+        "operationId": "sendHeartbeat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Heartbeat" },
+              "examples": {
+                "healthy":   { "value": { "healthStatus": "healthy" } },
+                "degraded":  { "value": { "healthStatus": "degraded" } },
+                "unhealthy": { "value": { "healthStatus": "unhealthy" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated repository",
+            "content": {
+              "application/hal+json": { "schema": { "$ref": "#/components/schemas/Repository" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": ["Stats"],
+        "summary": "Ecosystem statistics",
+        "description": "Returns aggregate counts across all registered repositories.",
+        "operationId": "getStats",
+        "responses": {
+          "200": {
+            "description": "Ecosystem stats",
+            "content": {
+              "application/hal+json": { "schema": { "$ref": "#/components/schemas/Stats" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiEndpoint": {
+        "type": "object",
+        "properties": {
+          "path":        { "type": "string", "example": "/orders/{id}" },
+          "method":      { "type": "string", "example": "GET" },
+          "description": { "type": "string", "example": "Fetch an order by ID" },
+          "contentType": { "type": "string", "example": "application/json" }
+        }
+      },
+      "HateoasLink": {
+        "type": "object",
+        "properties": {
+          "href":   { "type": "string" },
+          "method": { "type": "string" }
+        }
+      },
+      "Repository": {
+        "type": "object",
+        "properties": {
+          "id":              { "type": "string", "format": "uuid" },
+          "name":            { "type": "string" },
+          "url":             { "type": "string", "nullable": true },
+          "description":     { "type": "string" },
+          "repoType":        { "type": "string", "enum": ["producer", "consumer", "both"] },
+          "healthStatus":    { "type": "string", "enum": ["healthy", "degraded", "unhealthy", "unknown"] },
+          "healthCheckUrl":  { "type": "string", "nullable": true },
+          "lastHealthCheck": { "type": "string", "format": "date-time", "nullable": true },
+          "apis":            { "type": "array", "items": { "$ref": "#/components/schemas/ApiEndpoint" } },
+          "tags":            { "type": "array", "items": { "type": "string" } },
+          "createdAt":       { "type": "string", "format": "date-time" },
+          "updatedAt":       { "type": "string", "format": "date-time" },
+          "_links":          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/HateoasLink" } }
+        }
+      },
+      "RepositoryList": {
+        "type": "object",
+        "properties": {
+          "total":        { "type": "integer" },
+          "repositories": { "type": "array", "items": { "$ref": "#/components/schemas/Repository" } },
+          "_links":       { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/HateoasLink" } }
+        }
+      },
+      "RepositoryCreate": {
+        "type": "object",
+        "required": ["name", "description", "repoType"],
+        "properties": {
+          "name":           { "type": "string" },
+          "description":    { "type": "string" },
+          "repoType":       { "type": "string", "enum": ["producer", "consumer", "both"] },
+          "url":            { "type": "string" },
+          "healthCheckUrl": { "type": "string" },
+          "apis":           { "type": "array", "items": { "$ref": "#/components/schemas/ApiEndpoint" } },
+          "tags":           { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "RepositoryUpdate": {
+        "type": "object",
+        "properties": {
+          "description":    { "type": "string" },
+          "repoType":       { "type": "string", "enum": ["producer", "consumer", "both"] },
+          "url":            { "type": "string" },
+          "healthCheckUrl": { "type": "string" },
+          "apis":           { "type": "array", "items": { "$ref": "#/components/schemas/ApiEndpoint" } },
+          "tags":           { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Heartbeat": {
+        "type": "object",
+        "required": ["healthStatus"],
+        "properties": {
+          "healthStatus": { "type": "string", "enum": ["healthy", "degraded", "unhealthy"] }
+        }
+      },
+      "HealthStatus": {
+        "type": "object",
+        "properties": {
+          "id":              { "type": "string", "format": "uuid" },
+          "name":            { "type": "string" },
+          "healthStatus":    { "type": "string", "enum": ["healthy", "degraded", "unhealthy", "unknown"] },
+          "lastHealthCheck": { "type": "string", "format": "date-time", "nullable": true },
+          "healthCheckUrl":  { "type": "string", "nullable": true },
+          "_links":          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/HateoasLink" } }
+        }
+      },
+      "Stats": {
+        "type": "object",
+        "properties": {
+          "totalRepositories": { "type": "integer" },
+          "byType": {
+            "type": "object",
+            "properties": {
+              "producer": { "type": "integer" },
+              "consumer": { "type": "integer" },
+              "both":     { "type": "integer" }
+            }
+          },
+          "byHealth": {
+            "type": "object",
+            "properties": {
+              "healthy":   { "type": "integer" },
+              "degraded":  { "type": "integer" },
+              "unhealthy": { "type": "integer" },
+              "unknown":   { "type": "integer" }
+            }
+          },
+          "totalApisExposed": { "type": "integer" },
+          "_links": { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/HateoasLink" } }
+        }
+      },
+      "Root": {
+        "type": "object",
+        "properties": {
+          "name":        { "type": "string" },
+          "description": { "type": "string" },
+          "version":     { "type": "string" },
+          "_links":      { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/HateoasLink" } }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status":  { "type": "integer" },
+          "error":   { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "NotFound":   { "description": "Not found",   "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "BadRequest": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Conflict":   { "description": "Conflict",    "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    }
+  }
+}
